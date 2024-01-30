@@ -2,6 +2,7 @@ import os
 import sys
 
 import requests
+from io import BytesIO
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton
@@ -18,7 +19,7 @@ class Example(QWidget):
         self.map_zoom = 12
         self.getImage()
         self.initUI()
-        self.delta = 0.01
+        self.delta = 0.1
 
     def getImage(self):
         map_request = (f"http://static-maps.yandex.ru/1.x/?ll={self.map_ll[0]},{self.map_ll[1]}"
@@ -46,20 +47,36 @@ class Example(QWidget):
         self.image.move(0, 0)
         self.image.resize(1000, 600)
         self.image.setPixmap(self.pixmap)
+
         self.coord_label = QLabel(self)
         self.coord_label.move(650, 10)
         self.coord_label.setText('Введите координаты:')
+
         self.coord = QLineEdit(self)
         self.coord.setText(str(self.map_ll[0])[:5] + ' ' + str(self.map_ll[1])[:5])
         self.coord.setGeometry(650, 50, 100, 50)
+
         self.but = QPushButton(self)
         self.but.setGeometry(650, 100, 100, 50)
         self.but.setText('Обновить')
         self.but.clicked.connect(self.reload)
+
         self.laybut = QPushButton(self)
         self.laybut.setGeometry(650, 150, 100, 50)
         self.laybut.setText('Сменить слой')
         self.laybut.clicked.connect(self.layer)
+
+        self.srch = QLineEdit(self)
+        self.srch.setGeometry(650, 300, 100, 50)
+
+        self.search_label = QLabel(self)
+        self.search_label.move(630, 280)
+        self.search_label.setText('Введите название места:')
+
+        self.srcbut = QPushButton(self)
+        self.srcbut.setGeometry(650, 350, 100, 50)
+        self.srcbut.setText('Искать')
+        self.srcbut.clicked.connect(self.search)
 
     def reload(self):
         try:
@@ -76,6 +93,39 @@ class Example(QWidget):
         else:
             self.map_l = 'map'
         self.getImage()
+
+    def search(self):
+        try:
+            toponym_to_find = self.srch.text()
+            geocoder_api_server = "http://geocode-maps.yandex.ru/1.x/"
+            geocoder_params = {
+                "apikey": "40d1649f-0493-4b70-98ba-98533de7710b",
+                "geocode": toponym_to_find,
+                "format": "json"}
+            resp = requests.get(geocoder_api_server, params=geocoder_params)
+            if not resp:
+                sys.exit(0)
+            json_response = resp.json()
+            toponym = json_response["response"]["GeoObjectCollection"]["featureMember"][0]["GeoObject"]
+            toponym_coodrinates = toponym["Point"]["pos"]
+            toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
+            self.map_ll[0], self.map_ll[1] = float(toponym_longitude), float(toponym_lattitude)
+
+            map_params = {
+                "ll": ",".join([toponym_longitude, toponym_lattitude]),
+                "l": "map",
+                "pt": f'{toponym_longitude},{toponym_lattitude}'
+            }
+
+            map_api_server = "http://static-maps.yandex.ru/1.x/"
+            resp = requests.get(map_api_server, params=map_params)
+
+            self.pixmap.loadFromData(BytesIO(resp.content).getvalue())
+            self.map_zoom = 20
+            self.image.setPixmap(self.pixmap)
+        except Exception:
+            self.srch.setText('Объект не найден')
+
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -94,7 +144,6 @@ class Example(QWidget):
             self.map_zoom += 1
         self.coord.setText(str(self.map_ll[0])[:5] + ' ' + str(self.map_ll[1])[:5])
         self.getImage()
-
 
     def closeEvent(self, event):
         os.remove(self.map_file)
