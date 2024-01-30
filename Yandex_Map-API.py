@@ -7,7 +7,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton
 
 SCREEN_SIZE = [800, 600]
-
+# Тест
 
 class Example(QWidget):
     def __init__(self):
